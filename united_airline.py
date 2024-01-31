@@ -26,7 +26,7 @@ def get_data(origin, destination, departure_date):
     url = 'https://www.united.com/api/flight/FetchFlights'
 
     payload = {"SearchTypeSelection": 1, "SortType": "bestmatches", "SortTypeDescending": False, "Trips": [
-        {"Origin": origin, "Destination": destination, "DepartDate": departure_date, "Index": 1, "TripIndex": 1,
+        {"Origin": origin, "Destination": destination, "DepartDate": "2024-02-15", "Index": 1, "TripIndex": 1,
          "SearchRadiusMilesOrigin": 0, "SearchRadiusMilesDestination": 0, "DepartTimeApprox": 0,
          "SearchFiltersIn": {"FareFamily": "FIRST", "AirportsStop": None, "AirportsStopToAvoid": None}}],
                "CabinPreferenceMain": "premium", "PaxInfoList": [{"PaxType": 1}], "AwardTravel": True, "NGRP": True,
@@ -103,12 +103,12 @@ def get_data(origin, destination, departure_date):
             item['Aircraft Description'] = safe_get(flight, ['EquipmentDisclosures', 'EquipmentDescription'])
             item['Cabin Class'] = product.get('CabinType', '')
 
-            item['Airline Points'] = flight.get('MileageActual', '')
-            prices = product.get("Prices", [])
-            item['Airline Taxes'] = prices[2]['Amount'] if len(prices) > 2 else ""
-            item['Currency'] = prices[2]['Currency'] if len(prices) > 2 else ""
+            item['Airline Points'] = product['Prices'][0]['Amount'] if product['Prices'] else ''
 
-            arr.append(item)
+            item['Airline Taxes'] = product['Prices'][1]['Amount'] if product['Prices'] else ''
+            item['Currency'] = product['Prices'][1]['Currency'] if product['Prices'] else ''
+            if item['Airline Points']:
+                arr.append(item)
 
     unique_arr = []
     seen = set()
@@ -150,7 +150,6 @@ def create_driver():
     options.add_experimental_option('useAutomationExtension', False)
     options.add_argument("--disable-blink-features=AutomationControlled")
     driver = webdriver.Chrome(options=options)
-    # driver = webdriver.Firefox()
 
     return driver
 
