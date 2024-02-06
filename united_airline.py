@@ -21,6 +21,47 @@ def total_available_seats(availability_string):
     return total_seats
 
 
+def get_seats_info(flight):
+    payload = {"channelTransactionId": "e5f18879-0ae1-a41f-5d8c-422f2cd4a90e", "correlationId": "", "sessionKey": "",
+               "dodCabins": None,
+               "seatMapRequest": {"recordLocator": None, "currencyCode": "USD", "languageCode": "en-US",
+                                  "isLapChild": False, "isAwardReservation": False, "flightSegments": [
+                       {"arrivalAirport": {"iataCode": safe_get(flight, ['Warnings', 0, 'SDLMessages', 1, 'Params', 'ArriveAirportCode'])}, "checkInSegment": False, "classOfService": None,
+                        "coupons": [{}], "departureAirport": {"iataCode": safe_get(flight,
+                                                      ['Warnings', 0, 'SDLMessages', 0, 'Params', 'DepartAirportCode'])},
+                        "departureDateTime": flight.get('DepartDateTime', ''), "farebasisCode": None,
+                        "flightNumber": flight.get('OriginalFlightNumber', ''),
+                        "isValidSegment": True, "marketingAirlineCode": flight.get('MarketingCarrier', ''),
+                        "operatingAirlineCode": flight.get('MarketingCarrier', ''),
+                        "operatingFlightNumber": None, "pricing": "false"}], "reservationReferences": None,
+                                  "travelers": None, "bookingCode": None, "dutyCode": None, "bundleCode": None,
+                                  "channelId": "101", "channelName": None, "hasSSR": False}}
+    blocked = True
+    while blocked:
+        try:
+            print('getting tickets for flight: {}'.format(flight.get('OriginalFlightNumber', '')))
+            global headers
+            url = 'https://www.united.com/api/SeatMap/Retrieve'
+            response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)
+            blocked = False
+            return json.loads(response.text)
+        except:
+            print('got blocked')
+
+            headers = get_headers()
+
+
+def safe_get(container, keyss, default=''):
+    """Safely get a value from a nested dictionary or list."""
+    temp = container
+    for key in keyss:
+        try:
+            temp = temp[key]
+        except (KeyError, IndexError, TypeError):
+            return default
+    return temp
+
+
 def get_data(origin, destination, departure_date):
     global headers
     url = 'https://www.united.com/api/flight/FetchFlights'
@@ -50,18 +91,11 @@ def get_data(origin, destination, departure_date):
     arr = []
 
     for flight in flights_data['data']['Trips'][0]['Flights']:
+        tickets_data = get_seats_info(flight)
         for product in flight["Products"]:
             item = dict()
 
-            def safe_get(container, keyss, default=''):
-                """Safely get a value from a nested dictionary or list."""
-                temp = container
-                for key in keyss:
-                    try:
-                        temp = temp[key]
-                    except (KeyError, IndexError, TypeError):
-                        return default
-                return temp
+
 
             # Use the safe_get function to retrieve values safely
             item['Departure Date'] = flight.get('DepartDateTime', '').split()[0]
@@ -89,7 +123,12 @@ def get_data(origin, destination, departure_date):
 
             item['# Stops'] = 'Yes' if flight.get('StopInfos') else 'No'
             item['Nonstop Flight'] = 'No' if flight.get('StopInfos') else 'Yes'
-            item['# Available Tickets'] = total_available_seats(flight.get("BookingClassAvailability", []))
+            try:
+                cabin = [v for v in tickets_data['cabins'] if v['cabinBrand'] == product['Description']]
+            except:
+                continue
+            if cabin:
+                item['# Available Tickets'] = cabin[0]['availableSeats']
 
             item['Booking Airline Code'] = flight.get('MarketingCarrier', '')
             item['Booking Airline Description'] = flight.get('MarketingCarrierDescription', '')
@@ -149,6 +188,7 @@ def create_driver():
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     options.add_argument("--disable-blink-features=AutomationControlled")
+    # options.add_argument("--headless")
     driver = webdriver.Chrome(options=options)
 
     return driver
@@ -183,9 +223,11 @@ if __name__ == '__main__':
     today = datetime.datetime.now()
     print(today)
     headers = get_headers()
+    # headers = {}
     for i in range(1, 90):
         due_date = today + datetime.timedelta(days=i)
         print('getting data for {}'.format(due_date))
         get_data(origin, destination, str(due_date).split()[0])
+        # get_data(origin, destination, '2024-02-15')
 
     print(datetime.datetime.now())
